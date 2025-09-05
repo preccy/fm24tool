@@ -70,12 +70,13 @@ def parse_players(html_path: str | Path) -> List[Player]:
     if not rows:
         return []
 
-    headers = [c.get_text(strip=True) for c in rows[0].find_all(["th", "td"])]
+    headers = [c.get_text(strip=True).upper() for c in rows[0].find_all(["th", "td"])]
 
     def _idx(names: Iterable[str]) -> int | None:
         for n in names:
-            if n in headers:
-                return headers.index(n)
+            n_upper = n.upper()
+            if n_upper in headers:
+                return headers.index(n_upper)
         return None
 
     name_idx = _idx(["Player", "Name"])
