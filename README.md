@@ -4,8 +4,10 @@ Simple Football Manager 2024 squad formation analyser.
 
 Given an exported squad list as an HTML table, the tool evaluates a set of
 common formations and scores them on a 0–100 scale based on each player's
-attribute rating.  All formation scores are printed so you can compare how the
-squad fits different shapes, with the best formation highlighted at the end.
+attribute rating. Player ratings are normalised from the game's 0–200 CA scale
+so scores stay realistic. All formation scores are printed so you can compare
+how the squad fits different shapes, with the best formation highlighted at the
+end.
 
 The package includes a ``__main__`` entrypoint so it can be executed with
 ``python -m fm24_tool``. A broad selection of formations used in FM24, such as
