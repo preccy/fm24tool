@@ -81,7 +81,7 @@ def parse_players(html_path: str | Path) -> List[Player]:
 
     name_idx = _idx(["Player", "Name"])
     pos_idx = _idx(["Position"])
-    rating_idx = _idx(["CA", "Rating"])
+    rating_idx = _idx(["CA", "Ability", "Rating"])
     if None in (name_idx, pos_idx, rating_idx):
         return []
 
