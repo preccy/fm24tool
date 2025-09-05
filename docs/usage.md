@@ -18,21 +18,23 @@ pip install -r requirements.txt
 python -m fm24_tool path/to/squad.html
 ```
 
-Replace `path/to/squad.html` with the path to your exported file.  
+Replace `path/to/squad.html` with the path to your exported file.
 The program analyses the squad and prints the formation with the highest score.
 
 ### Example
-A sample squad file is included under `tests/data/sample_squad.html`.  
+A sample squad file is included under `tests/data/exported_squad.html`.
 You can test the tool with:
 
 ```bash
-python -m fm24_tool tests/data/sample_squad.html
+python -m fm24_tool tests/data/exported_squad.html
 ```
 
 Typical output:
 
 ```
-Best formation: 4-4-2 (score 75.00/100)
+4-4-2: 87.41/100
+...
+Best formation: 4-4-2 (score 87.41/100)
 ```
 
 ## Optional: Run Tests
