@@ -70,6 +70,7 @@ def parse_players(html_path: str | Path) -> List[Player]:
     if not rows:
         return []
 
+    # Normalize header text to uppercase for case-insensitive matching.
     headers = [c.get_text(strip=True).upper() for c in rows[0].find_all(["th", "td"])]
 
     def _idx(names: Iterable[str]) -> int | None:
@@ -81,7 +82,7 @@ def parse_players(html_path: str | Path) -> List[Player]:
 
     name_idx = _idx(["Player", "Name"])
     pos_idx = _idx(["Position"])
-    rating_idx = _idx(["CA", "Ability", "Rating"])
+    rating_idx = _idx(["CA", "Ability", "Rating"])  # Allow fallback "Ability"
     if None in (name_idx, pos_idx, rating_idx):
         return []
 
