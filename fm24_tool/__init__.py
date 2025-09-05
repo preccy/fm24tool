@@ -8,7 +8,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, Iterable, List
 
 from bs4 import BeautifulSoup
 
@@ -20,12 +20,43 @@ class Player:
     rating: float
 
 
-FORMATIONS: Dict[str, Dict[str, int]] = {
-    "4-4-2": {"GK": 1, "DEF": 4, "MID": 4, "FWD": 2},
-    "4-3-3": {"GK": 1, "DEF": 4, "MID": 3, "FWD": 3},
-    "3-5-2": {"GK": 1, "DEF": 3, "MID": 5, "FWD": 2},
-    "4-2-3-1": {"GK": 1, "DEF": 4, "MID": 5, "FWD": 1},
-}
+# Common FM24 formations expressed as defender-midfield-forward counts.
+FORMATION_STRINGS: Iterable[str] = (
+    "4-4-2",
+    "4-3-3",
+    "3-5-2",
+    "4-2-3-1",
+    "4-4-1-1",
+    "4-1-4-1",
+    "4-1-3-2",
+    "4-5-1",
+    "4-3-1-2",
+    "4-2-2-2",
+    "4-2-4",
+    "4-3-2-1",
+    "3-4-3",
+    "3-4-1-2",
+    "3-3-4",
+    "5-3-2",
+    "5-4-1",
+    "5-2-3",
+    "5-2-1-2",
+    "3-6-1",
+)
+
+
+def _parse_formation(s: str) -> Dict[str, int]:
+    """Convert a formation string like "4-2-3-1" into slot counts."""
+    parts = [int(p) for p in s.split("-") if p.isdigit()]
+    if not parts:
+        return {"GK": 1, "DEF": 0, "MID": 0, "FWD": 0}
+    defenders = parts[0]
+    forwards = parts[-1] if len(parts) > 1 else 0
+    midfielders = sum(parts[1:-1]) if len(parts) > 2 else (parts[1] if len(parts) == 2 else 0)
+    return {"GK": 1, "DEF": defenders, "MID": midfielders, "FWD": forwards}
+
+
+FORMATIONS: Dict[str, Dict[str, int]] = {s: _parse_formation(s) for s in FORMATION_STRINGS}
 
 
 def parse_players(html_path: str | Path) -> List[Player]:
@@ -35,56 +66,94 @@ def parse_players(html_path: str | Path) -> List[Player]:
     table = soup.find("table")
     if table is None:
         return []
-    players: List[Player] = []
     rows = table.find_all("tr")
+    if not rows:
+        return []
+
+    headers = [c.get_text(strip=True) for c in rows[0].find_all(["th", "td"])]
+
+    def _idx(names: Iterable[str]) -> int | None:
+        for n in names:
+            if n in headers:
+                return headers.index(n)
+        return None
+
+    name_idx = _idx(["Player", "Name"])
+    pos_idx = _idx(["Position"])
+    rating_idx = _idx(["CA", "Rating"])
+    if None in (name_idx, pos_idx, rating_idx):
+        return []
+
+    players: List[Player] = []
     for row in rows[1:]:
         cells = [c.get_text(strip=True) for c in row.find_all(["td", "th"])]
-        if len(cells) < 3:
+        if len(cells) <= max(name_idx, pos_idx, rating_idx):
             continue
-        name, position, rating_str = cells[0], cells[1], cells[2]
+        name = cells[name_idx].replace(" - Pick Player", "")
+        position = cells[pos_idx]
+        rating_str = cells[rating_idx]
         try:
             rating = float(rating_str)
         except ValueError:
-            continue
+            digits = "".join(ch for ch in rating_str if ch.isdigit() or ch == ".")
+            if not digits:
+                continue
+            rating = float(digits)
+        # Ratings in FM range from 0-200 (CA).  Normalize to a 0-100 scale and
+        # clip values outside that range so unrealistic numbers do not skew
+        # formation scores.
+        rating = max(0.0, min(rating, 200.0)) / 2.0
         players.append(Player(name=name, position=position, rating=rating))
     return players
 
 
-def _category(position: str) -> str | None:
+def _categories(position: str) -> List[str]:
+    """Return all category labels a player can cover."""
     pos = position.upper()
+    cats: List[str] = []
     if "GK" in pos:
-        return "GK"
-    if "D" in pos:
-        return "DEF"
-    if "M" in pos:
-        return "MID"
+        cats.append("GK")
     if "ST" in pos or "FW" in pos:
-        return "FWD"
-    return None
+        cats.append("FWD")
+    if "M" in pos:
+        cats.append("MID")
+    if "D" in pos:
+        cats.append("DEF")
+    return cats
 
 
 def formation_score(players: List[Player], formation: Dict[str, int]) -> float:
-    grouped: Dict[str, List[float]] = {"GK": [], "DEF": [], "MID": [], "FWD": []}
-    for p in players:
-        cat = _category(p.position)
-        if cat:
-            grouped[cat].append(p.rating)
-    for ratings in grouped.values():
-        ratings.sort(reverse=True)
+    """Return the average rating for a given formation.
+
+    Players are greedily assigned to any category (GK/DEF/MID/FWD) they can
+    cover, prioritising higher-rated players.  Ratings are expected to be on a
+    0-100 scale.
+    """
+    remaining = formation.copy()
+    total_slots = sum(remaining.values())
     total_rating = 0.0
-    total_slots = sum(formation.values())
-    for cat, needed in formation.items():
-        ratings = grouped.get(cat, [])
-        if len(ratings) < needed:
-            ratings = ratings + [0.0] * (needed - len(ratings))
-        total_rating += sum(ratings[:needed])
-    return total_rating / total_slots if total_slots else 0.0
+    for p in sorted(players, key=lambda pl: pl.rating, reverse=True):
+        eligible = [c for c in _categories(p.position) if remaining.get(c, 0) > 0]
+        if not eligible:
+            continue
+        # Choose the category with the most remaining slots to reduce skew.
+        cat = max(eligible, key=lambda c: remaining[c])
+        total_rating += max(0.0, min(p.rating, 100.0))
+        remaining[cat] -= 1
+    score = total_rating / total_slots if total_slots else 0.0
+    return min(score, 100.0)
+
+
+def formation_scores(players: List[Player]) -> Dict[str, float]:
+    """Compute scores for all supported formations sorted by score."""
+    scores = {name: formation_score(players, f) for name, f in FORMATIONS.items()}
+    return dict(sorted(scores.items(), key=lambda item: item[1], reverse=True))
 
 
 def best_formation(players: List[Player]) -> tuple[str, float]:
-    scores = {name: formation_score(players, f) for name, f in FORMATIONS.items()}
-    best = max(scores, key=scores.get)
-    return best, scores[best]
+    scores = formation_scores(players)
+    best = next(iter(scores.items()))
+    return best[0], best[1]
 
 
 def main(argv: List[str] | None = None) -> None:
@@ -95,8 +164,11 @@ def main(argv: List[str] | None = None) -> None:
     if not players:
         print("No players found in HTML file.")
         raise SystemExit(1)
-    formation, score = best_formation(players)
-    print(f"Best formation: {formation} (score {score:.2f}/100)")
+    scores = formation_scores(players)
+    for name, score in scores.items():
+        print(f"{name}: {score:.2f}/100")
+    best_form, best_score = next(iter(scores.items()))
+    print(f"Best formation: {best_form} (score {best_score:.2f}/100)")
 
 
 if __name__ == "__main__":
