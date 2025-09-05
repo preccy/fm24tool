@@ -8,7 +8,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, Iterable, List
 
 from bs4 import BeautifulSoup
 
@@ -20,12 +20,43 @@ class Player:
     rating: float
 
 
-FORMATIONS: Dict[str, Dict[str, int]] = {
-    "4-4-2": {"GK": 1, "DEF": 4, "MID": 4, "FWD": 2},
-    "4-3-3": {"GK": 1, "DEF": 4, "MID": 3, "FWD": 3},
-    "3-5-2": {"GK": 1, "DEF": 3, "MID": 5, "FWD": 2},
-    "4-2-3-1": {"GK": 1, "DEF": 4, "MID": 5, "FWD": 1},
-}
+# Common FM24 formations expressed as defender-midfield-forward counts.
+FORMATION_STRINGS: Iterable[str] = (
+    "4-4-2",
+    "4-3-3",
+    "3-5-2",
+    "4-2-3-1",
+    "4-4-1-1",
+    "4-1-4-1",
+    "4-1-3-2",
+    "4-5-1",
+    "4-3-1-2",
+    "4-2-2-2",
+    "4-2-4",
+    "4-3-2-1",
+    "3-4-3",
+    "3-4-1-2",
+    "3-3-4",
+    "5-3-2",
+    "5-4-1",
+    "5-2-3",
+    "5-2-1-2",
+    "3-6-1",
+)
+
+
+def _parse_formation(s: str) -> Dict[str, int]:
+    """Convert a formation string like "4-2-3-1" into slot counts."""
+    parts = [int(p) for p in s.split("-") if p.isdigit()]
+    if not parts:
+        return {"GK": 1, "DEF": 0, "MID": 0, "FWD": 0}
+    defenders = parts[0]
+    forwards = parts[-1] if len(parts) > 1 else 0
+    midfielders = sum(parts[1:-1]) if len(parts) > 2 else (parts[1] if len(parts) == 2 else 0)
+    return {"GK": 1, "DEF": defenders, "MID": midfielders, "FWD": forwards}
+
+
+FORMATIONS: Dict[str, Dict[str, int]] = {s: _parse_formation(s) for s in FORMATION_STRINGS}
 
 
 def parse_players(html_path: str | Path) -> List[Player]:
@@ -35,17 +66,39 @@ def parse_players(html_path: str | Path) -> List[Player]:
     table = soup.find("table")
     if table is None:
         return []
-    players: List[Player] = []
     rows = table.find_all("tr")
+    if not rows:
+        return []
+
+    headers = [c.get_text(strip=True) for c in rows[0].find_all(["th", "td"])]
+
+    def _idx(names: Iterable[str]) -> int | None:
+        for n in names:
+            if n in headers:
+                return headers.index(n)
+        return None
+
+    name_idx = _idx(["Player", "Name"])
+    pos_idx = _idx(["Position"])
+    rating_idx = _idx(["CA", "Rating"])
+    if None in (name_idx, pos_idx, rating_idx):
+        return []
+
+    players: List[Player] = []
     for row in rows[1:]:
         cells = [c.get_text(strip=True) for c in row.find_all(["td", "th"])]
-        if len(cells) < 3:
+        if len(cells) <= max(name_idx, pos_idx, rating_idx):
             continue
-        name, position, rating_str = cells[0], cells[1], cells[2]
+        name = cells[name_idx].replace(" - Pick Player", "")
+        position = cells[pos_idx]
+        rating_str = cells[rating_idx]
         try:
             rating = float(rating_str)
         except ValueError:
-            continue
+            digits = "".join(ch for ch in rating_str if ch.isdigit() or ch == ".")
+            if not digits:
+                continue
+            rating = float(digits)
         players.append(Player(name=name, position=position, rating=rating))
     return players
 

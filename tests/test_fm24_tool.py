@@ -12,6 +12,14 @@ def test_parse_players():
     assert players[0].name == "G1"
 
 
+def test_parse_exported_format():
+    players = parse_players("tests/data/exported_squad.html")
+    assert len(players) == 2
+    assert players[0].name == "G1"
+    assert players[0].position == "GK"
+    assert players[0].rating == 100.0
+
+
 def test_best_formation():
     players = parse_players("tests/data/sample_squad.html")
     formation, score = best_formation(players)
