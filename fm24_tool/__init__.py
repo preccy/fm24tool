@@ -169,7 +169,3 @@ def main(argv: List[str] | None = None) -> None:
         print(f"{name}: {score:.2f}/100")
     best_form, best_score = next(iter(scores.items()))
     print(f"Best formation: {best_form} (score {best_score:.2f}/100)")
-
-
-if __name__ == "__main__":
-    main()
