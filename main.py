@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
     QTableWidgetItem,
     QHeaderView,
     QTabWidget,
+    QDialog,
 )
 
 class FM24Tool(QWidget):
@@ -56,6 +57,23 @@ class FM24Tool(QWidget):
                 padding: 6px;
                 font-weight: bold;
             }
+            QTabWidget::pane {
+                border: 1px solid #2979ff;
+            }
+            QTabBar::tab {
+                background-color: #1e1e1e;
+                color: #f0f0f0;
+                padding: 8px;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+            }
+            QTabBar::tab:selected {
+                background-color: #2979ff;
+                color: #ffffff;
+            }
+            QTabBar::tab:hover {
+                background-color: #1c54b2;
+            }
             """
         )
 
@@ -72,6 +90,7 @@ class FM24Tool(QWidget):
         self.formations_table = QTableWidget()
         self._prep_table(self.formations_table)
         self.tabs.addTab(self.formations_table, "Formations")
+        self.formations_table.cellDoubleClicked.connect(self.show_best_xi)
 
         self.tactics_table = QTableWidget()
         self._prep_table(self.tactics_table)
@@ -160,18 +179,83 @@ class FM24Tool(QWidget):
             tactic_rows.append({'Style': name, 'Score': round(score, 2)})
         self.populate_table(self.tactics_table, pd.DataFrame(tactic_rows))
 
+    def show_best_xi(self, row, column):
+        df = getattr(self, 'df', None)
+        if df is None:
+            return
+        item = self.formations_table.item(row, 0)
+        if item is None:
+            return
+        form_name = item.text()
+        positions = FORMATIONS.get(form_name)
+        if not positions:
+            return
+        xi_df, _ = best_xi_for_formation(df, positions)
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Best XI - {form_name}")
+        layout = QVBoxLayout(dialog)
+        table = QTableWidget()
+        self._prep_table(table)
+        self.populate_table(table, xi_df)
+        layout.addWidget(table)
+        dialog.resize(600, 400)
+        dialog.show()
+        if not hasattr(self, '_xi_dialogs'):
+            self._xi_dialogs = []
+        self._xi_dialogs.append(dialog)
+
+def player_position_score(player, pos):
+    attrs = POSITION_ATTRS.get(pos, [])
+    vals = [player[a] for a in attrs if a in player.index and pd.notna(player[a])]
+    attr_score = sum(vals) / len(vals) if vals else 0
+    return player.get('CA', 0) * 0.7 + attr_score * 3
+
+
+def best_xi_for_formation(df, positions):
+    def normalize(pos, choices):
+        if pos in choices:
+            return pos
+        while len(pos) > 2:
+            pos = pos[:-1]
+            if pos in choices:
+                return pos
+        return pos if pos in choices else None
+
+    available = set(df['Position Selected'])
+    used = set()
+    rows = []
+    total = 0
+    missing = []
+    for pos in positions:
+        norm = normalize(pos, available)
+        candidates = df[(df['Position Selected'] == norm) & (~df['Name'].isin(used))] if norm else pd.DataFrame()
+        if candidates.empty:
+            missing.append(pos)
+            continue
+        candidates = candidates.copy()
+        candidates['Score'] = candidates.apply(lambda r: player_position_score(r, pos), axis=1)
+        best = candidates.sort_values('Score', ascending=False).iloc[0]
+        rows.append({'Position': pos, 'Name': best['Name'], 'Score': round(best['Score'], 2)})
+        used.add(best['Name'])
+        total += best['Score']
+    if missing:
+        remaining = df[~df['Name'].isin(used)].sort_values('CA', ascending=False)
+        for pos in missing:
+            if remaining.empty:
+                break
+            best = remaining.iloc[0]
+            remaining = remaining.iloc[1:]
+            score = player_position_score(best, pos)
+            rows.append({'Position': pos, 'Name': best['Name'], 'Score': round(score, 2)})
+            used.add(best['Name'])
+            total += score
+    avg = total / len(positions) if positions else 0
+    return pd.DataFrame(rows), avg
+
 
 def formation_score(df, positions):
-    used = set()
-    total = 0
-    for pos in positions:
-        candidates = df[(df['Position Selected'] == pos) & (~df['Name'].isin(used))]
-        if candidates.empty:
-            continue
-        best = candidates.sort_values('CA', ascending=False).iloc[0]
-        total += best['CA']
-        used.add(best['Name'])
-    return (total / (200 * len(positions))) * 100
+    _, avg = best_xi_for_formation(df, positions)
+    return (avg / 200) * 100
 
 
 def style_score(df, attrs):
@@ -180,12 +264,47 @@ def style_score(df, attrs):
     if not cols:
         return 0
     return (top[cols].mean().mean() / 20) * 100
+ 
+POSITION_ATTRS = {
+    'GK': ['Ref', 'One', 'Han', 'Aer'],
+    'DL': ['Acc', 'Pac', 'Tck', 'Mar', 'Cro'],
+    'DR': ['Acc', 'Pac', 'Tck', 'Mar', 'Cro'],
+    'DCL': ['Tck', 'Mar', 'Pos', 'Jum', 'Hea'],
+    'DCR': ['Tck', 'Mar', 'Pos', 'Jum', 'Hea'],
+    'DC': ['Tck', 'Mar', 'Pos', 'Jum', 'Hea'],
+    'DM': ['Tck', 'Pos', 'Tea', 'Sta', 'Pas'],
+    'MCL': ['Pas', 'Tec', 'Sta', 'Dec'],
+    'MCR': ['Pas', 'Tec', 'Sta', 'Dec'],
+    'MC': ['Pas', 'Tec', 'Sta', 'Dec'],
+    'ML': ['Cro', 'Pas', 'Tec', 'Sta', 'Acc'],
+    'MR': ['Cro', 'Pas', 'Tec', 'Sta', 'Acc'],
+    'AML': ['Dri', 'Pas', 'Tec', 'Fla', 'Fin'],
+    'AMR': ['Dri', 'Pas', 'Tec', 'Fla', 'Fin'],
+    'AMC': ['Dri', 'Pas', 'Tec', 'Fla', 'Fin'],
+    'STC': ['Fin', 'Cmp', 'Tec', 'Acc', 'Str'],
+    'STCL': ['Fin', 'Cmp', 'Tec', 'Acc', 'Str'],
+    'STCR': ['Fin', 'Cmp', 'Tec', 'Acc', 'Str'],
+    'WBR': ['Acc', 'Pac', 'Cro', 'Sta', 'Tck'],
+    'WBL': ['Acc', 'Pac', 'Cro', 'Sta', 'Tck'],
+}
 
 
 FORMATIONS = {
     '4-3-3': ['GK', 'DR', 'DCR', 'DCL', 'DL', 'DM', 'MCR', 'MCL', 'AMR', 'AML', 'STC'],
     '4-4-2': ['GK', 'DR', 'DCR', 'DCL', 'DL', 'MR', 'ML', 'MCR', 'MCL', 'STCR', 'STCL'],
     '3-5-2': ['GK', 'DCR', 'DC', 'DCL', 'MR', 'ML', 'DM', 'MCR', 'MCL', 'STCR', 'STCL'],
+    '4-2-3-1': ['GK', 'DR', 'DCR', 'DCL', 'DL', 'MCR', 'MCL', 'AMR', 'AMC', 'AML', 'STC'],
+    '4-3-1-2': ['GK', 'DR', 'DCR', 'DCL', 'DL', 'MCR', 'MC', 'MCL', 'AMC', 'STCR', 'STCL'],
+    '4-5-1': ['GK', 'DR', 'DCR', 'DCL', 'DL', 'MR', 'ML', 'MCR', 'MC', 'MCL', 'STC'],
+    '4-1-4-1': ['GK', 'DR', 'DCR', 'DCL', 'DL', 'DM', 'MR', 'ML', 'MCR', 'MCL', 'STC'],
+    '4-2-4': ['GK', 'DR', 'DCR', 'DCL', 'DL', 'MCR', 'MCL', 'AMR', 'AML', 'STCR', 'STCL'],
+    '3-4-3': ['GK', 'DCR', 'DC', 'DCL', 'MR', 'ML', 'MCR', 'MCL', 'AMR', 'AML', 'STC'],
+    '3-4-1-2': ['GK', 'DCR', 'DC', 'DCL', 'MR', 'ML', 'MCR', 'MCL', 'AMC', 'STCR', 'STCL'],
+    '5-3-2': ['GK', 'WBR', 'DCR', 'DC', 'DCL', 'WBL', 'MCR', 'MC', 'MCL', 'STCR', 'STCL'],
+    '5-4-1': ['GK', 'WBR', 'DCR', 'DC', 'DCL', 'WBL', 'MR', 'ML', 'MCR', 'MCL', 'STC'],
+    '3-4-2-1': ['GK', 'DCR', 'DC', 'DCL', 'MR', 'ML', 'MCR', 'MCL', 'AMR', 'AML', 'STC'],
+    '4-2-2-2': ['GK', 'DR', 'DCR', 'DCL', 'DL', 'MCR', 'MCL', 'AMR', 'AML', 'STCR', 'STCL'],
+    '4-3-2-1': ['GK', 'DR', 'DCR', 'DCL', 'DL', 'MCR', 'MC', 'MCL', 'AMR', 'AML', 'STC'],
 }
 
 
