@@ -216,16 +216,19 @@ def best_xi_for_formation(df, positions):
     rows = []
     total = 0
     for pos in positions:
-        candidates = df[(df['Position Selected'] == pos) & (~df['Name'].isin(used))]
+        remaining = df[~df['Name'].isin(used)]
+        if remaining.empty:
+            break
+        candidates = remaining[remaining['Position Selected'].str.contains(pos, na=False)]
         if candidates.empty:
-            continue
+            candidates = remaining
         candidates = candidates.copy()
         candidates['Score'] = candidates.apply(lambda r: player_position_score(r, pos), axis=1)
         best = candidates.sort_values('Score', ascending=False).iloc[0]
         rows.append({'Position': pos, 'Name': best['Name'], 'Score': round(best['Score'], 2)})
         used.add(best['Name'])
         total += best['Score']
-    avg = total / len(positions) if positions else 0
+    avg = total / len(rows) if rows else 0
     return pd.DataFrame(rows), avg
 
 
