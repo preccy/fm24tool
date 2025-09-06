@@ -8,11 +8,8 @@ from PyQt5.QtWidgets import (
     QFileDialog,
     QTableWidget,
     QTableWidgetItem,
-
     QHeaderView,
-    QTabWidget
-    QHeaderView
-
+    QTabWidget,
 )
 
 class FM24Tool(QWidget):
@@ -98,13 +95,6 @@ class FM24Tool(QWidget):
     def _prep_table(self, table):
         table.setAlternatingRowColors(True)
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-
-        self.table = QTableWidget()
-        self.table.setAlternatingRowColors(True)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-
-        layout.addWidget(self.open_button)
-        layout.addWidget(self.table)
 
 
     def open_file(self):
@@ -204,16 +194,6 @@ STYLE_ATTRS = {
     'Defensive': ['Tck', 'Mar', 'Pos'],
     'Possession': ['Pas', 'Tec', 'Cmp'],
 }
-
-                self.table.setRowCount(0)
-                self.table.setColumnCount(0)
-                self.table.setColumnCount(len(df.columns))
-                self.table.setHorizontalHeaderLabels(df.columns)
-                for row_index, row in df.iterrows():
-                    self.table.insertRow(row_index)
-                    for column_index, value in enumerate(row):
-                        item = QTableWidgetItem(str(value))
-                        self.table.setItem(row_index, column_index, item)
 
 
 
