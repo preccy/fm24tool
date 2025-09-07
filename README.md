@@ -8,6 +8,7 @@ A minimalistic Python tool for displaying Football Manager 2024 squad data expor
 
 - Rate common formations and tactical styles on a 1-100 scale
 - Tabs highlighting the best, worst, and wonderkid players in the squad
+- Position scoring uses weighted attributes based on FM-Arena testing
 
 
 ## Installation

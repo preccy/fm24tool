@@ -243,8 +243,14 @@ def parse_positions(pos_str):
 
 def player_position_score(player, pos):
     attrs = POSITION_ATTRS.get(pos, [])
-    vals = [player[a] for a in attrs if a in player.index and pd.notna(player[a])]
-    attr_score = sum(vals) / len(vals) if vals else 0
+    total = 0
+    weight_sum = 0
+    for a in attrs:
+        if a in player.index and pd.notna(player[a]):
+            w = ATTRIBUTE_WEIGHTS.get(a, 1)
+            total += player[a] * w
+            weight_sum += w
+    attr_score = total / weight_sum if weight_sum else 0
     return player.get('CA', 0) * 0.7 + attr_score * 3
 
 
@@ -281,6 +287,40 @@ def style_score(df, attrs):
     if not cols:
         return 0
     return (top[cols].mean().mean() / 20) * 100
+
+# Attribute weights derived from FM-Arena testing
+ATTRIBUTE_WEIGHTS = {
+    'Pac': 2.0,
+    'Acc': 1.77,
+    'Jum': 1.46,
+    'Dri': 1.38,
+    'Bal': 1.19,
+    'Con': 1.15,
+    'Ant': 1.15,
+    'Det': 1.12,
+    'Agi': 1.12,
+    'Sta': 1.08,
+    'Str': 1.08,
+    'Fir': 1.04,
+    'Cmp': 1.04,
+    'Wor': 1.04,
+    'Fin': 1.04,
+    'Fla': 1.04,
+    'LSh': 1.04,
+    'Agg': 1.04,
+    'Hea': 1.04,
+    'OTB': 1.0,
+    'Dec': 1.0,
+    'Cro': 1.0,
+    'Vis': 1.0,
+    'Tck': 1.04,
+    'Pos': 1.04,
+    'Tec': 1.04,
+    'Mar': 1.04,
+    'Pas': 1.08,
+    'Bra': 1.04,
+    'Tea': 1.08,
+}
  
 POSITION_ATTRS = {
     'GK': ['Ref', 'One', 'Han', 'Aer'],
