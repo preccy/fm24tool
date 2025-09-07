@@ -14,7 +14,9 @@ from PyQt5.QtWidgets import (
     QHeaderView,
     QTabWidget,
     QDialog,
+    QTextEdit,
 )
+from openai import OpenAI
 
 class FM24Tool(QWidget):
     def __init__(self):
@@ -114,8 +116,16 @@ class FM24Tool(QWidget):
         self.title_bar.installEventFilter(self)
         layout.addWidget(self.title_bar)
 
+        button_bar = QHBoxLayout()
         self.open_button = QPushButton("Open Squad HTML")
         self.open_button.clicked.connect(self.open_file)
+        button_bar.addWidget(self.open_button)
+
+        self.assess_button = QPushButton("Assess My Squad")
+        self.assess_button.clicked.connect(self.assess_squad)
+        button_bar.addWidget(self.assess_button)
+
+        layout.addLayout(button_bar)
 
         self.tabs = QTabWidget()
 
@@ -144,7 +154,6 @@ class FM24Tool(QWidget):
         self._prep_table(self.wonder_table)
         self.tabs.addTab(self.wonder_table, "Wonderkids")
 
-        layout.addWidget(self.open_button)
         layout.addWidget(self.tabs)
 
     def _prep_table(self, table):
@@ -234,6 +243,44 @@ class FM24Tool(QWidget):
             score = style_score(df, attrs)
             tactic_rows.append({'Style': name, 'Score': round(score, 2)})
         self.populate_table(self.tactics_table, pd.DataFrame(tactic_rows))
+
+    def assess_squad(self):
+        df = getattr(self, 'df', None)
+        if df is None:
+            return
+        try:
+            summary = df[['Name', 'Age', 'CA', 'PA'] + self.attribute_cols].to_dict(orient='records')
+        except Exception:
+            summary = df.to_dict(orient='records')
+        prompt = (
+            "You are a football squad analyst. Using the squad data with fields like Name, Age, CA, "
+            "PA and attributes, provide a concise assessment outlining strengths, areas needing "
+            "upgrades or depth, and players who could be offloaded due to age or low potential."
+        )
+        try:
+            client = OpenAI()
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": str(summary)},
+                ],
+            )
+            assessment = response.choices[0].message.content
+        except Exception as e:
+            assessment = f"Error generating assessment: {e}"
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Squad Assessment")
+        layout = QVBoxLayout(dialog)
+        text = QTextEdit()
+        text.setReadOnly(True)
+        text.setPlainText(assessment)
+        layout.addWidget(text)
+        dialog.resize(600, 400)
+        dialog.show()
+        if not hasattr(self, '_assessment_dialogs'):
+            self._assessment_dialogs = []
+        self._assessment_dialogs.append(dialog)
 
     def show_best_xi(self, row, column):
         df = getattr(self, 'df', None)
