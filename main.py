@@ -136,6 +136,10 @@ class FM24Tool(QWidget):
                 for col in ['CA', 'PA', 'Age'] + self.attribute_cols:
                     if col in df.columns:
                         df[col] = pd.to_numeric(df[col], errors='coerce')
+                if 'Position' in df.columns:
+                    df['PosSet'] = df['Position'].apply(parse_positions)
+                else:
+                    df['PosSet'] = [set() for _ in range(len(df))]
                 self.df = df
                 self.populate_table(self.table, df)
                 self.update_analysis()
@@ -204,6 +208,39 @@ class FM24Tool(QWidget):
             self._xi_dialogs = []
         self._xi_dialogs.append(dialog)
 
+def parse_positions(pos_str):
+    pos_str = str(pos_str)
+    segments = [seg.strip() for seg in pos_str.split(',')]
+    codes = set()
+    for seg in segments:
+        if not seg:
+            continue
+        if '(' in seg:
+            roles_part, sides_part = seg.split('(')
+            sides = list(sides_part.strip(')'))
+        else:
+            roles_part = seg
+            sides = ['']
+        roles = [r.strip() for r in roles_part.split('/')]
+        for role in roles:
+            for side in sides:
+                code = (role + side).replace(' ', '')
+                codes.add(code)
+    expanded = set()
+    for code in codes:
+        expanded.add(code)
+        if code == 'DC':
+            expanded.update({'DCL', 'DCR'})
+        elif code == 'MC':
+            expanded.update({'MCL', 'MCR'})
+        elif code == 'AM':
+            expanded.update({'AML', 'AMR', 'AMC'})
+        elif code == 'ST':
+            expanded.add('STC')
+        elif code == 'WB':
+            expanded.update({'WBL', 'WBR'})
+    return expanded
+
 def player_position_score(player, pos):
     attrs = POSITION_ATTRS.get(pos, [])
     vals = [player[a] for a in attrs if a in player.index and pd.notna(player[a])]
@@ -219,7 +256,7 @@ def best_xi_for_formation(df, positions):
         remaining = df[~df['Name'].isin(used)]
         if remaining.empty:
             break
-        candidates = remaining[remaining['Position Selected'].str.contains(pos, na=False)]
+        candidates = remaining[remaining['PosSet'].apply(lambda s: pos in s)]
         if candidates.empty:
             rows.append({'Position': pos, 'Name': 'None', 'Score': 0})
             continue
