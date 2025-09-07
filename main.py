@@ -1,10 +1,13 @@
 import sys
 import pandas as pd
+from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtWidgets import (
     QApplication,
     QWidget,
     QVBoxLayout,
+    QHBoxLayout,
     QPushButton,
+    QLabel,
     QFileDialog,
     QTableWidget,
     QTableWidgetItem,
@@ -18,33 +21,44 @@ class FM24Tool(QWidget):
         super().__init__()
         self.setWindowTitle("FM24 Squad Viewer")
         self.resize(1200, 600)
+        self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)
+        self.drag_position = None
         self._init_ui()
 
     def _init_ui(self):
         self.setStyleSheet(
             """
             QWidget {
-                background-color: #000000;
-                color: #f0f0f0;
+                background-color: #1e1e1e;
+                color: #e0e0e0;
                 font-family: 'Segoe UI', sans-serif;
+            }
+            #TitleBar {
+                background-color: #2b2b2b;
             }
             QPushButton {
                 background-color: #2979ff;
                 color: #ffffff;
                 border: none;
-                border-radius: 15px;
-                padding: 10px 20px;
+                border-radius: 4px;
+                padding: 6px 12px;
             }
             QPushButton:hover {
                 background-color: #1c54b2;
             }
+            QPushButton#WindowControl {
+                padding: 4px;
+                border-radius: 4px;
+                width: 24px;
+                height: 24px;
+            }
             QTableWidget {
-                background-color: #121212;
-                alternate-background-color: #1e1e1e;
+                background-color: #262626;
+                alternate-background-color: #2e2e2e;
                 border: 1px solid #2979ff;
-                border-radius: 10px;
-                gridline-color: #1e1e1e;
-                color: #f0f0f0;
+                border-radius: 4px;
+                gridline-color: #2e2e2e;
+                color: #e0e0e0;
             }
             QTableWidget::item:selected {
                 background-color: #2979ff;
@@ -61,9 +75,9 @@ class FM24Tool(QWidget):
                 border: 1px solid #2979ff;
             }
             QTabBar::tab {
-                background-color: #1e1e1e;
-                color: #f0f0f0;
-                padding: 8px;
+                background-color: #2b2b2b;
+                color: #e0e0e0;
+                padding: 8px 12px;
                 border-top-left-radius: 4px;
                 border-top-right-radius: 4px;
             }
@@ -78,6 +92,28 @@ class FM24Tool(QWidget):
         )
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        self.title_bar = QWidget()
+        self.title_bar.setObjectName("TitleBar")
+        title_layout = QHBoxLayout(self.title_bar)
+        title_layout.setContentsMargins(10, 0, 10, 0)
+        title_layout.setSpacing(5)
+        title_label = QLabel("FM24 Squad Viewer")
+        title_layout.addWidget(title_label)
+        title_layout.addStretch()
+        self.full_button = QPushButton("⛶")
+        self.full_button.setObjectName("WindowControl")
+        self.full_button.clicked.connect(self.toggle_fullscreen)
+        self.close_button = QPushButton("✕")
+        self.close_button.setObjectName("WindowControl")
+        self.close_button.clicked.connect(self.close)
+        title_layout.addWidget(self.full_button)
+        title_layout.addWidget(self.close_button)
+        self.title_bar.installEventFilter(self)
+        layout.addWidget(self.title_bar)
+
         self.open_button = QPushButton("Open Squad HTML")
         self.open_button.clicked.connect(self.open_file)
 
@@ -114,6 +150,22 @@ class FM24Tool(QWidget):
     def _prep_table(self, table):
         table.setAlternatingRowColors(True)
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+    def toggle_fullscreen(self):
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
+
+    def eventFilter(self, obj, event):
+        if obj == self.title_bar:
+            if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+                self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
+                return True
+            elif event.type() == QEvent.MouseMove and event.buttons() == Qt.LeftButton and self.drag_position is not None:
+                self.move(event.globalPos() - self.drag_position)
+                return True
+        return super().eventFilter(obj, event)
 
 
     def open_file(self):
