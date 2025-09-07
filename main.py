@@ -20,6 +20,9 @@ from PyQt5.QtWidgets import (
 )
 from openai import OpenAI
 
+
+DEFAULT_MODEL = "gpt-4o-mini"
+
 class FM24Tool(QWidget):
     def __init__(self):
         super().__init__()
@@ -278,7 +281,7 @@ class FM24Tool(QWidget):
         try:
             client = OpenAI(api_key=self.api_key) if self.api_key else OpenAI()
             response = client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=DEFAULT_MODEL,
                 messages=[
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": str(summary)},
