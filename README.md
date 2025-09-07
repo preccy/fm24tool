@@ -19,10 +19,11 @@ pip install -r requirements.txt
 
 ## Usage
 ```
-export OPENAI_API_KEY=your_api_key
 python main.py
 ```
 Then click **Open Squad HTML** and choose an exported FM24 squad HTML file.
+
+For squad assessments via ChatGPT, supply your OpenAI API key either by setting the `OPENAI_API_KEY` environment variable before launch or by clicking the ⚙ settings icon within the app and entering the key.
 
 Use **Assess My Squad** to generate a summary of strengths, weak spots, and players to consider offloading.
 
