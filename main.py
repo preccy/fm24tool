@@ -1,6 +1,6 @@
 import sys
 import pandas as pd
-from PyQt5.QtCore import Qt, QEvent, QPropertyAnimation, QEasingCurve
+from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtWidgets import (
     QApplication,
     QWidget,
@@ -14,7 +14,6 @@ from PyQt5.QtWidgets import (
     QHeaderView,
     QTabWidget,
     QDialog,
-    QGraphicsOpacityEffect,
 )
 
 class FM24Tool(QWidget):
@@ -25,7 +24,6 @@ class FM24Tool(QWidget):
         self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)
         self.drag_position = None
         self._init_ui()
-        self._init_animations()
 
     def _init_ui(self):
         self.setStyleSheet(
@@ -146,43 +144,8 @@ class FM24Tool(QWidget):
         self._prep_table(self.wonder_table)
         self.tabs.addTab(self.wonder_table, "Wonderkids")
 
-        self.tabs.currentChanged.connect(self.fade_in_current_tab)
-
         layout.addWidget(self.open_button)
         layout.addWidget(self.tabs)
-
-    def _init_animations(self):
-        self.setWindowOpacity(0.0)
-        self.window_anim = QPropertyAnimation(self, b"windowOpacity")
-        self.window_anim.setDuration(500)
-        self.window_anim.setStartValue(0.0)
-        self.window_anim.setEndValue(1.0)
-        self.window_anim.setEasingCurve(QEasingCurve.InOutQuad)
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        self.window_anim.start()
-
-    def animate_fade_in(self, widget):
-        effect = QGraphicsOpacityEffect(widget)
-        widget.setGraphicsEffect(effect)
-        effect.setOpacity(0.0)
-        anim = QPropertyAnimation(effect, b"opacity")
-        anim.setDuration(400)
-        anim.setStartValue(0.0)
-        anim.setEndValue(1.0)
-        anim.setEasingCurve(QEasingCurve.InOutQuad)
-
-        def cleanup():
-            widget.setGraphicsEffect(None)
-
-        anim.finished.connect(cleanup)
-        anim.start(QPropertyAnimation.DeleteWhenStopped)
-
-    def fade_in_current_tab(self, index):
-        widget = self.tabs.widget(index)
-        if widget:
-            self.animate_fade_in(widget)
 
     def _prep_table(self, table):
         table.setAlternatingRowColors(True)
@@ -246,7 +209,6 @@ class FM24Tool(QWidget):
             for column_index, value in enumerate(row):
                 item = QTableWidgetItem(str(value))
                 table.setItem(row_index, column_index, item)
-        self.animate_fade_in(table)
 
     def update_analysis(self):
         df = getattr(self, 'df', None)
