@@ -418,9 +418,16 @@ FORMATIONS = {
 
 
 STYLE_ATTRS = {
-    'Attacking': ['Fin', 'Dri', 'Tec'],
-    'Defensive': ['Tck', 'Mar', 'Pos'],
-    'Possession': ['Pas', 'Tec', 'Cmp'],
+    'Gegenpress': ['Wor', 'Sta', 'Agg'],
+    'Tiki-Taka': ['Pas', 'Tec', 'Cmp'],
+    'Vertical Tiki-Taka': ['Pas', 'Tec', 'Dec'],
+    'Control Possession': ['Pas', 'Dec', 'Vis'],
+    'Wing Play': ['Acc', 'Pac', 'Cro'],
+    'Route One': ['Jum', 'Hea', 'Str'],
+    'Fluid Counter-Attack': ['Acc', 'Pac', 'Dec'],
+    'Direct Counter-Attack': ['Acc', 'Pac', 'Fin'],
+    'Park the Bus': ['Tck', 'Mar', 'Pos'],
+    'Catenaccio': ['Tck', 'Pos', 'Ant'],
 }
 
 
