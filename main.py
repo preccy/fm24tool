@@ -15,6 +15,8 @@ from PyQt5.QtWidgets import (
     QTabWidget,
     QDialog,
     QTextEdit,
+    QInputDialog,
+    QLineEdit,
 )
 from openai import OpenAI
 
@@ -25,6 +27,7 @@ class FM24Tool(QWidget):
         self.resize(1200, 600)
         self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)
         self.drag_position = None
+        self.api_key = None
         self._init_ui()
 
     def _init_ui(self):
@@ -105,12 +108,16 @@ class FM24Tool(QWidget):
         title_label = QLabel("FM24 Squad Viewer")
         title_layout.addWidget(title_label)
         title_layout.addStretch()
+        self.settings_button = QPushButton("⚙")
+        self.settings_button.setObjectName("WindowControl")
+        self.settings_button.clicked.connect(self.open_settings)
         self.full_button = QPushButton("⛶")
         self.full_button.setObjectName("WindowControl")
         self.full_button.clicked.connect(self.toggle_fullscreen)
         self.close_button = QPushButton("✕")
         self.close_button.setObjectName("WindowControl")
         self.close_button.clicked.connect(self.close)
+        title_layout.addWidget(self.settings_button)
         title_layout.addWidget(self.full_button)
         title_layout.addWidget(self.close_button)
         self.title_bar.installEventFilter(self)
@@ -175,6 +182,17 @@ class FM24Tool(QWidget):
                 self.move(event.globalPos() - self.drag_position)
                 return True
         return super().eventFilter(obj, event)
+
+    def open_settings(self):
+        key, ok = QInputDialog.getText(
+            self,
+            "OpenAI API Key",
+            "Enter your OpenAI API key:",
+            QLineEdit.Password,
+            self.api_key or "",
+        )
+        if ok:
+            self.api_key = key
 
 
     def open_file(self):
@@ -258,7 +276,7 @@ class FM24Tool(QWidget):
             "upgrades or depth, and players who could be offloaded due to age or low potential."
         )
         try:
-            client = OpenAI()
+            client = OpenAI(api_key=self.api_key) if self.api_key else OpenAI()
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
